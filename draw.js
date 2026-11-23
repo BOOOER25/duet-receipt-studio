@@ -34,10 +34,10 @@ function product(c,img,item,x,y,w,h) {
   const size=Math.min(w,h)*item.scale;
   c.drawImage(outlined(img),x+(w-size)/2,y+(h-size)/2,size,size);
 }
-function fadeReceiptTop(c,height) {
+function fadeReceiptTop(c,height,strength=1) {
   const fade=c.createLinearGradient(0,0,0,34);
-  fade.addColorStop(0,'#00000000');
-  fade.addColorStop(.45,'#00000080');
+  fade.addColorStop(0,`rgba(0,0,0,${1-strength})`);
+  fade.addColorStop(.45,`rgba(0,0,0,${1-strength*.5})`);
   fade.addColorStop(1,'#000');
   c.save();c.globalCompositeOperation='destination-in';
   c.fillStyle=fade;c.fillRect(0,0,420,height);c.restore();
@@ -159,7 +159,6 @@ export function createRenderer(bitmaps,builtins=new Map()) {
     c.strokeStyle='#afa79a5c';c.lineWidth=.75;
     c.beginPath();c.moveTo(.5,0);c.lineTo(.5,height);
     c.moveTo(419.5,0);c.lineTo(419.5,height);c.stroke();
-    fadeReceiptTop(c,height);
     return {paper,timeline,steps:receiptPrintSteps(s.duration,timeline)};
   }
   let cachedReceipt,receiptWindow;
@@ -182,7 +181,7 @@ export function createRenderer(bitmaps,builtins=new Map()) {
         const wc=receiptWindow.getContext('2d');wc.setTransform(2,0,0,2,0,0);
         wc.clearRect(0,0,420,710);
         wc.drawImage(paper,0,offset*2,840,drawHeight*2,0,0,420,drawHeight);
-        fadeReceiptTop(wc,drawHeight);
+        fadeReceiptTop(wc,drawHeight,clamp(offset/24,0,1));
         c.drawImage(receiptWindow,60,bottom-drawHeight,420,drawHeight);
       }else c.drawImage(paper,0,0,840,drawHeight*2,60,bottom-drawHeight,420,drawHeight);
     }
