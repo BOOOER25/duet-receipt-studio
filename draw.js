@@ -34,6 +34,14 @@ function product(c,img,item,x,y,w,h) {
   const size=Math.min(w,h)*item.scale;
   c.drawImage(outlined(img),x+(w-size)/2,y+(h-size)/2,size,size);
 }
+function fadeReceiptTop(c,height) {
+  const fade=c.createLinearGradient(0,0,0,34);
+  fade.addColorStop(0,'#00000000');
+  fade.addColorStop(.45,'#00000080');
+  fade.addColorStop(1,'#000');
+  c.save();c.globalCompositeOperation='destination-in';
+  c.fillStyle=fade;c.fillRect(0,0,420,height);c.restore();
+}
 export function createRenderer(bitmaps) {
   const get=id=>bitmaps.get(id);
   function background(c,s) {
@@ -124,9 +132,13 @@ export function createRenderer(bitmaps) {
     });
     const diff=Math.abs(Math.round((sum[0]-sum[1])*100)/100);
     text(c,`差额 ${amount(diff,s.unit)}`,210,summaryY+139,13,'#716576',500,'center',380);
+    c.strokeStyle='#afa79a5c';c.lineWidth=.75;
+    c.beginPath();c.moveTo(.5,0);c.lineTo(.5,height);
+    c.moveTo(419.5,0);c.lineTo(419.5,height);c.stroke();
+    fadeReceiptTop(c,height);
     return {paper,timeline,steps:receiptPrintSteps(s.duration,timeline)};
   }
-  let cachedReceipt;
+  let cachedReceipt,receiptWindow;
   function receipt(c,s,time) {
     // Feed one paper in short pulls, with a true stop between time blocks.
     if(!cachedReceipt)cachedReceipt=receiptLayer(s);
@@ -135,7 +147,21 @@ export function createRenderer(bitmaps) {
     const bottom=755,drawHeight=Math.min(710,feed),offset=Math.max(0,feed-710);
     c.save();c.beginPath();c.rect(60,40,420,715);c.clip();
     c.shadowColor='#57455725';c.shadowBlur=18;c.shadowOffsetY=5;
-    if(drawHeight>0)c.drawImage(paper,0,offset*2,840,drawHeight*2,60,bottom-drawHeight,420,drawHeight);
+    if(drawHeight>0){
+      if(offset>0){
+        // Fade the new visible upper edge as long receipts leave the frame.
+        // Alpha reveals any chosen background instead of painting over it.
+        if(!receiptWindow){
+          receiptWindow=document.createElement('canvas');
+          receiptWindow.width=840;receiptWindow.height=1420;
+        }
+        const wc=receiptWindow.getContext('2d');wc.setTransform(2,0,0,2,0,0);
+        wc.clearRect(0,0,420,710);
+        wc.drawImage(paper,0,offset*2,840,drawHeight*2,0,0,420,drawHeight);
+        fadeReceiptTop(wc,drawHeight);
+        c.drawImage(receiptWindow,60,bottom-drawHeight,420,drawHeight);
+      }else c.drawImage(paper,0,0,840,drawHeight*2,60,bottom-drawHeight,420,drawHeight);
+    }
     c.restore();
     // Printer body covers the paper exit, giving a clean feed line.
     c.save();
