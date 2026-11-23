@@ -2,7 +2,7 @@ import {clamp,amount,totals,visibleItems} from './core.js';
 import {project} from './project.js';
 import {receiptTimeline,receiptFrame,receiptPrintSteps,HEADER_HEIGHT} from './receipt-timeline.js';
 const FONT='"Microsoft YaHei","PingFang SC",system-ui,sans-serif';
-const palettes={pink:['#f7d3dd','#e98da8','#fff9ed'],mint:['#cce9de','#70ad9c','#fffff6'],lilac:['#ded5f1','#9e8bc4','#fffdf7']};
+const palettes={fish:['#fffaf0','#d1ab50','#fffef7'],paws:['#ffe16b','#c69530','#fffef7'],pink:['#f7d3dd','#e98da8','#fff9ed'],mint:['#cce9de','#70ad9c','#fffff6'],lilac:['#ded5f1','#9e8bc4','#fffdf7']};
 const round=(c,x,y,w,h,r,fill)=>{c.beginPath();c.roundRect(x,y,w,h,r);c.fillStyle=fill;c.fill();};
 function text(c,s,x,y,size=16,color='#32333c',weight=500,align='left',max=Infinity) {
   c.save();c.font=`${weight} ${size}px ${FONT}`;c.fillStyle=color;c.textAlign=align;c.textBaseline='middle';
@@ -42,14 +42,38 @@ function fadeReceiptTop(c,height) {
   c.save();c.globalCompositeOperation='destination-in';
   c.fillStyle=fade;c.fillRect(0,0,420,height);c.restore();
 }
-export function createRenderer(bitmaps) {
+export function createRenderer(bitmaps,builtins=new Map()) {
   const get=id=>bitmaps.get(id);
+  let pawBackground;
+  function paws() {
+    if(pawBackground)return pawBackground;
+    pawBackground=document.createElement('canvas');pawBackground.width=1080;pawBackground.height=1920;
+    const c=pawBackground.getContext('2d');c.scale(2,2);
+    const gold=c.createLinearGradient(0,0,540,960);
+    gold.addColorStop(0,'#ffe889');gold.addColorStop(.5,'#ffe16b');gold.addColorStop(1,'#ffdc62');
+    c.fillStyle=gold;c.fillRect(0,0,540,960);
+    for(let row=-1;row<10;row++)for(let col=-1;col<5;col++){
+      c.save();c.translate(col*146+(row%2?69:0)+42,row*126+40);
+      c.rotate((row+col)%2 ? -.42 : .35);c.fillStyle='#fff2b575';
+      c.beginPath();c.ellipse(0,12,18,15,0,0,Math.PI*2);c.fill();
+      for(const [x,y,rx,ry,angle] of [[-22,-5,7,9,-.45],[-9,-17,8,10,-.15],[9,-18,8,10,.1],[23,-6,7,9,.4]]){
+        c.beginPath();c.ellipse(x,y,rx,ry,angle,0,Math.PI*2);c.fill();
+      }
+      c.restore();
+    }
+    return pawBackground;
+  }
   function background(c,s) {
     const [base,,paper]=palettes[s.theme]||palettes.pink;
     c.fillStyle=base;c.fillRect(0,0,540,960);
     const bg=get(s.background);
     if(bg) {cover(c,bg,0,0,540,960);c.fillStyle='#ffffff28';c.fillRect(0,0,540,960);}
-    else {
+    else if(s.theme==='fish') {
+      const pattern=builtins.get('background-fish-paws.png');
+      if(pattern)cover(c,pattern,0,0,540,960);
+    } else if(s.theme==='paws') {
+      c.drawImage(paws(),0,0,540,960);
+    } else {
       c.lineWidth=1;c.strokeStyle='#ffffff60';
       for(let x=0;x<=540;x+=24){c.beginPath();c.moveTo(x,0);c.lineTo(x,960);c.stroke();}
       for(let y=0;y<=960;y+=24){c.beginPath();c.moveTo(0,y);c.lineTo(540,y);c.stroke();}
@@ -178,10 +202,8 @@ export function createRenderer(bitmaps) {
       text(c,s.people[side].name,x,805,12,'#b6c0d2',500,'left',128);
       text(c,amount(sum[side],s.unit),x,835,25,'#f4c778',800,'left',139);
     });
-    c.fillStyle='#31394d';[256,284].forEach(x=>{c.beginPath();c.ellipse(x,818,4,7,0,0,7);c.fill();});
-    round(c,264,833,12,7,4,'#dba0b9');c.fillStyle=printing?'#52d5ad':'#9ed8c7';
-    c.shadowColor=printing?'#52d5ad':'transparent';c.shadowBlur=printing?9:0;
-    c.beginPath();c.arc(270,784,4,0,7);c.fill();c.shadowBlur=0;
+    const cat=builtins.get('receipt-cat.png');
+    if(cat)c.drawImage(cat,229,790,82,82*cat.height/cat.width);
     round(c,78,889,45,10,4,'#344253');round(c,416,889,45,10,4,'#344253');
     c.restore();
   }

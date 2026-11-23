@@ -38,7 +38,9 @@ export function normalize(raw) {
   const state = {
     version: 1, title: text(raw?.title), footer: text(raw?.footer).slice(0, 60),
     unit: raw?.unit, duration: Number(raw?.duration),
-    theme: ['pink', 'mint', 'lilac'].includes(raw?.theme) ? raw.theme : 'pink',
+    theme: raw?.presetRevision !== 1 && !raw?.background ? 'fish'
+      : ['fish','paws','pink','mint','lilac'].includes(raw?.theme) ? raw.theme : 'fish',
+    presetRevision: 1,
     background: ref(raw?.background), music: ref(raw?.music),
     people: Array.isArray(raw?.people) ? raw.people.map(p => ({name: text(p.name), avatar: ref(p.avatar)})) : [],
     items: Array.isArray(raw?.items) ? raw.items.map(x => ({
@@ -54,7 +56,7 @@ export function example(variant) {
   return {
     version: 1, title: '当我和闺蜜共享了今日消费', footer: '认真生活，也认真记录 · 喵喵记账',
     unit: '元', duration: variant === 'receipt' ? 17 : 15,
-    theme: variant === 'receipt' ? 'lilac' : 'pink', background: '', music: '',
+    theme: variant === 'receipt' ? 'fish' : 'pink', presetRevision: 1, background: '', music: '',
     people: [{name: '我', avatar: ''}, {name: '我的搭子', avatar: ''}],
     items: names.map((name, i) => ({
       id: `sample-${i}`, side: i === 1 || i === 3 || i === 7 ? 1 : 0, name,

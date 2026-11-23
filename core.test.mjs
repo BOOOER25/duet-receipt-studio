@@ -20,6 +20,20 @@ test('import removes remote references and rejects invalid schema',()=>{
   const clean=normalize(s);assert.equal(clean.people[0].avatar,'');assert.equal(clean.extra,undefined);
   assert.throws(()=>normalize({...s,version:2,duration:NaN}));
 });
+test('new backgrounds persist and old preset drafts adopt fish without changing custom backgrounds',()=>{
+  const fresh=example('receipt');
+  assert.equal(fresh.theme,'fish');
+  assert.equal(normalize(fresh).theme,'fish');
+  for(const theme of ['fish','paws','pink','mint','lilac']){
+    assert.equal(normalize({...fresh,theme}).theme,theme);
+  }
+  const old={...fresh,theme:'lilac'};delete old.presetRevision;
+  assert.equal(normalize(old).theme,'fish');
+  const custom=normalize({...old,background:'my-background'});
+  assert.equal(custom.background,'my-background');
+  assert.equal(custom.theme,'lilac');
+  assert.equal(normalize({...fresh,theme:'paws',background:'my-background'}).background,'my-background');
+});
 test('receipt shares hourly groups, orders by consumption time, and leaves absent sides empty',()=>{
   const s=example('receipt');
   s.items=[

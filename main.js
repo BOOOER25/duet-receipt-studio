@@ -6,8 +6,8 @@ import {createRenderer} from './draw.js';
 import {record,recordingType} from './recorder.js';
 
 const $=s=>document.querySelector(s);
-const assets=new Map(),bitmaps=new Map(),urls=new Map();
-const renderer=createRenderer(bitmaps);
+const assets=new Map(),bitmaps=new Map(),urls=new Map(),builtins=new Map();
+const renderer=createRenderer(bitmaps,builtins);
 let state=example(project.variant),store,time=state.duration,playing=false,start=0,frame;
 let side=0,pendingImage,saveTimer,toastTimer,recordController,cutoutBusy=false,videoUrl,revision=0,saveQueue=Promise.resolve();
 function toast(message) {clearTimeout(toastTimer);$('#toast').textContent=message;$('#toast').hidden=false;toastTimer=setTimeout(()=>$('#toast').hidden=true,6000);}
@@ -208,6 +208,11 @@ async function init() {
   $('#save-receipt').hidden=project.variant!=='receipt';
   const type=recordingType();$('#record-help').textContent=type?`录制为 ${type.startsWith('video/mp4')?'MP4':'WebM'} · 30 fps。按配置时长实时录制，请保持页面在前台。`:'当前浏览器不支持录制，可保存 PNG 或换用新版 Edge / Chrome。';
   if(!type)$('#record').disabled=true;
+  await Promise.all(['receipt-cat.png','background-fish-paws.png'].map(async file=>{
+    const response=await fetch('./'+file);
+    if(!response.ok)throw new Error('预设素材加载失败，请刷新重试');
+    builtins.set(file,await createImageBitmap(await response.blob()));
+  }));
   try {
     store=await openStore(project.id);const saved=await store.get();
     if(saved?.state) {await replaceProject({state:normalize(saved.state),assets:new Map(saved.assets.map(a=>[a.id,a]))});toast('已恢复本机保存的项目');}
