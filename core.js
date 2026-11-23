@@ -58,7 +58,9 @@ export function example(variant) {
     people: [{name: '我', avatar: ''}, {name: '我的搭子', avatar: ''}],
     items: names.map((name, i) => ({
       id: `sample-${i}`, side: i === 1 || i === 3 || i === 7 ? 1 : 0, name,
-      amount: String(prices[i]), clock: ['08:00', '08:30', '12:00', '14:00', '18:00', '19:00', '20:00', '21:00'][i],
+      amount: String(prices[i]), clock: (variant==='receipt'
+        ? ['08:00', '08:30', '12:00', '12:30', '18:00', '19:00', '20:00', '21:00']
+        : ['08:00', '08:30', '12:00', '14:00', '18:00', '19:00', '20:00', '21:00'])[i],
       at: 1 + i * 1.5, asset: `sample-${i % 4}`, scale: 1,
     })),
   };

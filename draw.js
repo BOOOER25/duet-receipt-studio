@@ -1,5 +1,6 @@
 import {clamp,amount,totals,visibleItems} from './core.js';
 import {project} from './project.js';
+import {receiptTimeline,receiptFrame,HEADER_HEIGHT} from './receipt-timeline.js';
 const FONT='"Microsoft YaHei","PingFang SC",system-ui,sans-serif';
 const palettes={pink:['#f7d3dd','#e98da8','#fff9ed'],mint:['#cce9de','#70ad9c','#fffff6'],lilac:['#ded5f1','#9e8bc4','#fffdf7']};
 const round=(c,x,y,w,h,r,fill)=>{c.beginPath();c.roundRect(x,y,w,h,r);c.fillStyle=fill;c.fill();};
@@ -82,70 +83,64 @@ export function createRenderer(bitmaps) {
     });
     text(c,s.footer,270,918,14,'#69606e',500,'center',472);
   }
-  function receiptLayer(s,time) {
-    const left=s.items.filter(x=>x.side===0).sort((a,b)=>a.at-b.at);
-    const right=s.items.filter(x=>x.side===1).sort((a,b)=>a.at-b.at);
-    const rows=Math.max(left.length,right.length,1),height=170+rows*100+230;
+  function receiptLayer(s) {
+    const timeline=receiptTimeline(s),{height,summaryY,groups}=timeline;
     const paper=document.createElement('canvas');paper.width=840;paper.height=height*2;
     const c=paper.getContext('2d');c.scale(2,2);
     c.fillStyle='#fffef7';c.fillRect(0,0,420,height);
-    text(c,'TODAY, TOGETHER',210,40,20,'#484451',800,'center');
-    text(c,'双人消费小票',210,68,12,'#89838c',500,'center');
     [0,1].forEach(side=>{
       const x=side?320:100;
-      avatar(c,get(s.people[side].avatar),x,108,18,s.people[side].name,side?'#aacbbb':'#d7a7bb');
-      text(c,s.people[side].name,x,140,13,'#4b4853',600,'center',160);
+      avatar(c,get(s.people[side].avatar),x,36,19,s.people[side].name,side?'#aacbbb':'#d7a7bb');
+      text(c,s.people[side].name,x,73,13,'#4b4853',600,'center',160);
     });
-    c.setLineDash([3,4]);c.strokeStyle='#c7c1c6';c.beginPath();c.moveTo(210,165);c.lineTo(210,height-220);c.stroke();c.setLineDash([]);
-    let lastY=155;
-    [left,right].forEach((items,side)=>items.forEach((item,i)=>{
-      if(item.at>time)return;
-      const y=168+i*100,x=side?228:18;lastY=Math.max(lastY,y+95);
-      product(c,get(item.asset),item,x,y,68,70);
-      text(c,item.name,x+73,y+21,12,'#58515c',500,'left',102);
-      text(c,amount(item.amount,s.unit),x+73,y+44,17,'#35343d',700,'left',104);
-      text(c,item.clock,x+73,y+66,10,'#a19aa3');
-    }));
-    const completed=time>=Math.max(0,...s.items.map(x=>x.at))+.35;
-    if(completed){
-      const y=170+rows*100,sum=totals(s,time);
-      c.strokeStyle='#66616b';c.lineWidth=1.5;c.beginPath();c.moveTo(18,y);c.lineTo(402,y);c.moveTo(18,y+5);c.lineTo(402,y+5);c.stroke();
-      [0,1].forEach(side=>{const x=side?320:100;text(c,'合计',x,y+30,12,'#9a929d',500,'center');text(c,amount(sum[side],s.unit),x,y+62,28,'#30313d',800,'center',185);});
-      const diff=Math.abs(Math.round((sum[0]-sum[1])*100)/100);
-      text(c,diff?`相差 ${amount(diff,s.unit)}`:'今天也是默契满分的一天',210,y+112,14,'#716576',500,'center',380);
-      c.setLineDash([3,4]);c.strokeStyle='#cfc5cd';c.beginPath();c.moveTo(18,y+143);c.lineTo(402,y+143);c.stroke();c.setLineDash([]);
-      text(c,s.footer,210,y+177,11,'#8f8593',500,'center',378);
-      lastY=height;
+    c.setLineDash([1.5,3]);c.strokeStyle='#b5aeba';c.lineWidth=1.2;
+    c.beginPath();c.moveTo(210,HEADER_HEIGHT-10);c.lineTo(210,summaryY-18);c.stroke();c.setLineDash([]);
+    for(const group of groups) {
+      const markerY=group.top+40;
+      round(c,185,markerY-12,50,24,12,'#fffef7');
+      c.beginPath();c.roundRect(185,markerY-12,50,24,12);c.strokeStyle='#b5aeba';c.lineWidth=.9;c.stroke();
+      text(c,group.label,210,markerY,12,'#655f6c',600,'center');
+      group.sides.forEach((items,side)=>items.forEach((item,i)=>{
+        const y=group.top+i*group.rowHeight,x=side?246:10;
+        product(c,get(item.asset),item,x,y+6,60,72);
+        const lines=[''];c.font=`500 12px ${FONT}`;
+        for(const char of item.name) {
+          const line=lines.length-1;
+          if(c.measureText(lines[line]+char).width>96&&line===0)lines.push(char);
+          else lines[line]+=char;
+        }
+        lines.forEach((line,index)=>text(c,line,x+64,y+21+index*15,12,'#58515c',500,'left',96));
+        text(c,amount(item.amount,s.unit),x+64,y+55,16,'#35343d',700,'left',96);
+        text(c,item.clock,x+64,y+77,10,'#a19aa3');
+      }));
     }
-    return {paper,height,revealed:lastY,completed};
+    const sum=receiptFrame(s,s.duration,timeline).totals;
+    c.strokeStyle='#66616b';c.lineWidth=1.5;c.beginPath();c.moveTo(18,summaryY);c.lineTo(402,summaryY);c.moveTo(18,summaryY+5);c.lineTo(402,summaryY+5);c.stroke();
+    [0,1].forEach(side=>{
+      const x=side?320:100;
+      text(c,'合计',x,summaryY+30,12,'#9a929d',500,'center');
+      text(c,amount(sum[side],s.unit),x,summaryY+64,27,'#30313d',800,'center',185);
+      text(c,`${s.items.filter(item=>item.side===side).length} 笔`,x,summaryY+98,11,'#a19aa3',500,'center');
+    });
+    const diff=Math.abs(Math.round((sum[0]-sum[1])*100)/100);
+    text(c,`差额 ${amount(diff,s.unit)}`,210,summaryY+139,13,'#716576',500,'center',380);
+    return {paper,timeline};
   }
-  let receiptKey='',cachedReceipt;
+  let cachedReceipt;
   function receipt(c,s,time) {
-    const key=`${s.items.filter(x=>x.at<=time).map(x=>x.id).join('|')}:${time>=Math.max(0,...s.items.map(x=>x.at))+.35}`;
-    // Rebuilt only when the reveal set changes; caller invalidates on edits.
-    if(key!==receiptKey){receiptKey=key;cachedReceipt=receiptLayer(s,time);}
-    const {paper,revealed,completed}=cachedReceipt;
-    const entries=visibleItems(s,time),latest=Math.max(0,...entries.map(x=>x.at));
-    let previous=155;
-    for(const side of [0,1]) {
-      s.items.filter(x=>x.side===side).sort((a,b)=>a.at-b.at).forEach((item,i)=>{
-        if(item.at<latest)previous=Math.max(previous,168+i*100+95);
-      });
-    }
-    const beforeSummary=170+Math.max(1,...[0,1].map(side=>s.items.filter(x=>x.side===side).length))*100;
-    const feed=completed?beforeSummary+(revealed-beforeSummary)*clamp((time-latest-.35)/.12,0,1)
-      :previous+(revealed-previous)*clamp((time-latest)/.28,0,1);
-    const printProgress=clamp(time/.7,0,1),bottom=755;
-    const drawHeight=Math.min(544,feed*printProgress),offset=Math.max(0,feed-544);
-    c.save();c.beginPath();c.rect(60,205,420,550);c.clip();
+    // One complete paper is fed continuously; entries never animate independently.
+    if(!cachedReceipt)cachedReceipt=receiptLayer(s);
+    const {paper,timeline}=cachedReceipt;
+    const {feed,totals:sum}=receiptFrame(s,time,timeline);
+    const bottom=755,drawHeight=Math.min(710,feed),offset=Math.max(0,feed-710);
+    c.save();c.beginPath();c.rect(60,40,420,715);c.clip();
     c.shadowColor='#57455725';c.shadowBlur=18;c.shadowOffsetY=5;
-    c.drawImage(paper,0,offset*2,840,drawHeight*2,60,bottom-drawHeight,420,drawHeight);
+    if(drawHeight>0)c.drawImage(paper,0,offset*2,840,drawHeight*2,60,bottom-drawHeight,420,drawHeight);
     c.restore();
     // Printer body covers the paper exit, giving a clean feed line.
     round(c,50,746,440,17,8,'#273343');
     const gradient=c.createLinearGradient(0,760,0,890);gradient.addColorStop(0,'#fff');gradient.addColorStop(1,'#dce3ee');
     round(c,30,762,480,128,36,gradient);round(c,58,785,168,76,20,'#273343');round(c,314,785,168,76,20,'#273343');
-    const sum=totals(s,time);
     [0,1].forEach(side=>{
       const x=side?330:73;
       text(c,s.people[side].name,x,805,12,'#b6c0d2',500,'left',128);
@@ -154,15 +149,15 @@ export function createRenderer(bitmaps) {
     c.fillStyle='#31394d';[256,284].forEach(x=>{c.beginPath();c.ellipse(x,818,4,7,0,0,7);c.fill();});
     round(c,264,833,12,7,4,'#dba0b9');c.fillStyle='#9ed8c7';c.beginPath();c.arc(270,784,4,0,7);c.fill();
     round(c,78,889,45,10,4,'#344253');round(c,416,889,45,10,4,'#344253');
-    text(c,'喵喵记账 · 今日小票',270,929,14,'#786b87',600,'center');
   }
   return {
-    invalidate(){receiptKey='';cachedReceipt=null;},
+    invalidate(){cachedReceipt=null;},
     draw(canvas,s,time){
       const c=canvas.getContext('2d');c.setTransform(canvas.width/540,0,0,canvas.height/960,0,0);
-      c.clearRect(0,0,540,960);background(c,s);header(c,s,time);
+      c.clearRect(0,0,540,960);background(c,s);
+      if(project.variant!=='receipt')header(c,s,time);
       project.variant==='receipt'?receipt(c,s,time):board(c,s,time);
     },
-    fullReceipt(s) {return receiptLayer(s,s.duration).paper;},
+    fullReceipt(s) {return receiptLayer(s).paper;},
   };
 }
