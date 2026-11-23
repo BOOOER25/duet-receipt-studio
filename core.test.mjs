@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {example,totals,validate,normalize} from './core.js';
-import {receiptTimeline,receiptFrame} from './receipt-timeline.js';
+import {receiptTimeline,receiptFrame,receiptPrintSteps} from './receipt-timeline.js';
 test('timeline totals include only revealed orders and preserve cents',()=>{
   const s=example('stickers');s.items=s.items.slice(0,3);
   assert.deepEqual(totals(s,0),[0,0]);
@@ -49,7 +49,7 @@ test('receipt printing and both totals ignore legacy independent animation offse
   assert.deepEqual(first.totals,timeline.groups[0].sides.map(items=>items.reduce((sum,x)=>sum+Math.round(Number(x.amount)*100),0)/100));
   assert.deepEqual(receiptFrame(s,s.duration).totals,totals(s,s.duration));
 });
-test('paper feeds continuously through empty, single-hour, and short multi-hour receipts',()=>{
+test('paper never reverses and finishes empty, single-hour, and short multi-hour receipts',()=>{
   for(const variant of ['empty','one-hour','multiple']){
     const s=example('receipt');s.duration=3;
     if(variant==='empty')s.items=[];
@@ -63,4 +63,38 @@ test('paper feeds continuously through empty, single-hour, and short multi-hour 
     }
     assert.equal(receiptFrame(s,3).completed,true);
   }
+});
+test('each time block is pulled quickly and stays completely still before the next pull',()=>{
+  const s=example('receipt'),timeline=receiptTimeline(s),steps=receiptPrintSteps(s.duration,timeline);
+  for(let i=0;i<steps.length;i++){
+    const step=steps[i],next=steps[i+1]?.start??s.duration;
+    assert.ok(step.end-step.start<=.48+.000001);
+    const moving=receiptFrame(s,(step.start+step.end)/2,timeline);
+    assert.equal(moving.printing,true);
+    assert.ok(moving.feed>step.from&&moving.feed<step.to);
+    const holdA=receiptFrame(s,step.end+(next-step.end)*.2,timeline);
+    const holdB=receiptFrame(s,step.end+(next-step.end)*.8,timeline);
+    assert.equal(holdA.printing,false);
+    assert.equal(holdB.printing,false);
+    assert.equal(holdA.feed,step.to);
+    assert.equal(holdB.feed,step.to);
+    assert.deepEqual(holdA.totals,holdB.totals);
+    if(i>0&&i<=timeline.groups.length){
+      assert.equal(holdA.printed.length,i);
+      assert.deepEqual(holdA.totals,timeline.groups.slice(0,i).reduce((sum,group)=>sum.map((n,side)=>n+group.sides[side].reduce((v,item)=>v+Math.round(Number(item.amount)*100),0)),[0,0]).map(n=>n/100));
+    }
+  }
+  assert.equal(receiptFrame(s,0).feed,0);
+  assert.equal(receiptFrame(s,s.duration-1).completed,true);
+});
+test('dense three-second receipts retain a stationary interval for every pull',()=>{
+  const s=example('receipt');s.duration=3;
+  s.items=Array.from({length:36},(_,i)=>({...s.items[i%8],id:String(i),side:i%2,at:0,clock:`${String(i%24).padStart(2,'0')}:00`}));
+  const timeline=receiptTimeline(s),steps=receiptPrintSteps(s.duration,timeline);
+  for(let i=0;i<steps.length;i++){
+    const next=steps[i+1]?.start??s.duration;
+    assert.ok(steps[i].start<steps[i].end&&steps[i].end<next);
+    assert.equal(receiptFrame(s,(steps[i].end+next)/2,timeline).feed,steps[i].to);
+  }
+  assert.deepEqual(receiptFrame(s,3).totals,totals(s,3));
 });

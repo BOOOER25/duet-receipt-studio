@@ -1,6 +1,6 @@
 import {clamp,amount,totals,visibleItems} from './core.js';
 import {project} from './project.js';
-import {receiptTimeline,receiptFrame,HEADER_HEIGHT} from './receipt-timeline.js';
+import {receiptTimeline,receiptFrame,receiptPrintSteps,HEADER_HEIGHT} from './receipt-timeline.js';
 const FONT='"Microsoft YaHei","PingFang SC",system-ui,sans-serif';
 const palettes={pink:['#f7d3dd','#e98da8','#fff9ed'],mint:['#cce9de','#70ad9c','#fffff6'],lilac:['#ded5f1','#9e8bc4','#fffdf7']};
 const round=(c,x,y,w,h,r,fill)=>{c.beginPath();c.roundRect(x,y,w,h,r);c.fillStyle=fill;c.fill();};
@@ -124,21 +124,27 @@ export function createRenderer(bitmaps) {
     });
     const diff=Math.abs(Math.round((sum[0]-sum[1])*100)/100);
     text(c,`差额 ${amount(diff,s.unit)}`,210,summaryY+139,13,'#716576',500,'center',380);
-    return {paper,timeline};
+    return {paper,timeline,steps:receiptPrintSteps(s.duration,timeline)};
   }
   let cachedReceipt;
   function receipt(c,s,time) {
-    // One complete paper is fed continuously; entries never animate independently.
+    // Feed one paper in short pulls, with a true stop between time blocks.
     if(!cachedReceipt)cachedReceipt=receiptLayer(s);
-    const {paper,timeline}=cachedReceipt;
-    const {feed,totals:sum}=receiptFrame(s,time,timeline);
+    const {paper,timeline,steps}=cachedReceipt;
+    const {feed,totals:sum,printing,phase}=receiptFrame(s,time,timeline,steps);
     const bottom=755,drawHeight=Math.min(710,feed),offset=Math.max(0,feed-710);
     c.save();c.beginPath();c.rect(60,40,420,715);c.clip();
     c.shadowColor='#57455725';c.shadowBlur=18;c.shadowOffsetY=5;
     if(drawHeight>0)c.drawImage(paper,0,offset*2,840,drawHeight*2,60,bottom-drawHeight,420,drawHeight);
     c.restore();
     // Printer body covers the paper exit, giving a clean feed line.
+    c.save();
+    const vibration=printing?Math.sin(phase*Math.PI*16)*Math.sin(phase*Math.PI)*.65:0;
+    c.translate(0,vibration);
     round(c,50,746,440,17,8,'#273343');
+    const exitShadow=c.createLinearGradient(0,736,0,750);
+    exitShadow.addColorStop(0,'#27334300');exitShadow.addColorStop(1,'#27334344');
+    c.fillStyle=exitShadow;c.fillRect(60,736,420,14);
     const gradient=c.createLinearGradient(0,760,0,890);gradient.addColorStop(0,'#fff');gradient.addColorStop(1,'#dce3ee');
     round(c,30,762,480,128,36,gradient);round(c,58,785,168,76,20,'#273343');round(c,314,785,168,76,20,'#273343');
     [0,1].forEach(side=>{
@@ -147,8 +153,11 @@ export function createRenderer(bitmaps) {
       text(c,amount(sum[side],s.unit),x,835,25,'#f4c778',800,'left',139);
     });
     c.fillStyle='#31394d';[256,284].forEach(x=>{c.beginPath();c.ellipse(x,818,4,7,0,0,7);c.fill();});
-    round(c,264,833,12,7,4,'#dba0b9');c.fillStyle='#9ed8c7';c.beginPath();c.arc(270,784,4,0,7);c.fill();
+    round(c,264,833,12,7,4,'#dba0b9');c.fillStyle=printing?'#52d5ad':'#9ed8c7';
+    c.shadowColor=printing?'#52d5ad':'transparent';c.shadowBlur=printing?9:0;
+    c.beginPath();c.arc(270,784,4,0,7);c.fill();c.shadowBlur=0;
     round(c,78,889,45,10,4,'#344253');round(c,416,889,45,10,4,'#344253');
+    c.restore();
   }
   return {
     invalidate(){cachedReceipt=null;},

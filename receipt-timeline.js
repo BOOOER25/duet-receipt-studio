@@ -23,26 +23,39 @@ export function receiptTimeline(state) {
   return {groups,summaryY,height:summaryY+SUMMARY_HEIGHT};
 }
 
-export function receiptFrame(state,time,timeline=receiptTimeline(state)) {
+export function receiptPrintSteps(duration,timeline) {
+  const opening=Math.min(.18,duration*.04),ending=Math.min(1.2,duration*.12);
+  const targets=[HEADER_HEIGHT,...timeline.groups.map(group=>group.bottom),timeline.height];
+  const slot=(duration-opening-ending)/targets.length;
+  return targets.map((to,index)=>({
+    from:index?targets[index-1]:0,to,
+    start:opening+slot*index,
+    end:opening+slot*index+Math.min(slot*.34,index===targets.length-1 ? .48 : .36),
+  }));
+}
+
+// A brief motor ramp, steady pull, and brake. The rest of each slot is
+// completely still so the newly printed time block can be read.
+function motorProgress(progress) {
+  const ramp=.12,travel=1-ramp;
+  if(progress<ramp)return progress*progress/(2*ramp*travel);
+  if(progress>1-ramp)return 1-(1-progress)**2/(2*ramp*travel);
+  return (progress-ramp/2)/travel;
+}
+
+export function receiptFrame(state,time,timeline=receiptTimeline(state),steps=receiptPrintSteps(state.duration,timeline)) {
   const duration=state.duration;
-  const first=timeline.groups[0]?.hour??0,last=timeline.groups.at(-1)?.hour??first;
-  const points=[{at:0,feed:0},{at:.35,feed:HEADER_HEIGHT}];
-  for(const group of timeline.groups) {
-    const proportion=last===first?1:(group.hour-first)/(last-first);
-    points.push({at:.65+proportion*(duration-1.5),feed:group.bottom});
-  }
-  points.push({at:duration-.15,feed:timeline.height});
   const t=clamp(time,0,duration);
-  let feed=timeline.height;
-  for(let i=1;i<points.length;i++) {
-    const previous=points[i-1],next=points[i];
-    if(t<=next.at) {
-      const progress=clamp((t-previous.at)/(next.at-previous.at),0,1);
-      feed=previous.feed+(next.feed-previous.feed)*progress;
-      break;
-    }
+  let feed=0,printing=false,phase=0;
+  for(const step of steps) {
+    if(t<=step.start)break;
+    if(t>=step.end){feed=step.to;continue;}
+    phase=(t-step.start)/(step.end-step.start);
+    feed=step.from+(step.to-step.from)*motorProgress(phase);
+    printing=true;
+    break;
   }
   const printed=timeline.groups.filter(group=>group.bottom<=feed+.0001);
   const totals=[0,1].map(side=>printed.reduce((sum,g)=>sum+g.sides[side].reduce((n,item)=>n+cents(item.amount),0),0)/100);
-  return {feed,totals,printed,completed:feed>=timeline.height};
+  return {feed,totals,printed,printing,phase,completed:feed>=timeline.height};
 }
