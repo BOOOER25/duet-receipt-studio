@@ -1,5 +1,5 @@
 import {project} from './project.js';
-import {example,validate,normalize,clamp} from './core.js';
+import {example,validate,normalize,clamp,localDate,compareOrders} from './core.js';
 import {imageAsset,cutout,cancelCutout,saveFile} from './media.js';
 import {openStore} from './storage.js';
 import {createRenderer} from './draw.js';
@@ -79,7 +79,7 @@ function syncScene() {
   }));
 }
 function syncOrders() {
-  const list=state.items.filter(x=>x.side===side).sort((a,b)=>a.clock.localeCompare(b.clock));
+  const list=state.items.filter(x=>x.side===side).sort(compareOrders);
   $('#side-filter').options[0].textContent=`${state.people[0].name}的明细`;
   $('#side-filter').options[1].textContent=`${state.people[1].name}的明细`;
   $('#orders').replaceChildren(...list.map((item,i)=>{
@@ -91,7 +91,10 @@ function syncOrders() {
       field(`本笔${state.unit==='元'?'消费金额':state.unit}`,item.amount,v=>edit(()=>item.amount=v),{inputmode:'decimal',maxlength:9}));
     body.append(image,info);
     const grid=node('div',{class:'field-grid'});
-    grid.append(field('消费时间',item.clock,v=>edit(()=>item.clock=v),{type:'time'}));
+    grid.append(
+      field('消费日期',item.date,v=>edit(()=>item.date=v,{refresh:true}),{type:'date',required:true}),
+      field('消费时间',item.clock,v=>edit(()=>item.clock=v,{refresh:true}),{type:'time'}),
+    );
     const select=assetOptions(item.asset,v=>edit(()=>item.asset=v,{refresh:true}));
     const actions=node('div',{class:'order-actions'});
     actions.append(
@@ -235,7 +238,7 @@ $('#play').addEventListener('click',play);
 $('#seek').addEventListener('input',e=>{pause();time=Number(e.target.value);render();});
 $('#side-filter').addEventListener('change',e=>{side=Number(e.target.value);syncOrders();});
 $('#add-item').addEventListener('click',()=>edit(()=>{
-  state.items.push({id:crypto.randomUUID(),side,name:'新的一笔',amount:'0',clock:'12:00',at:Math.min(state.duration-1,1+state.items.length*.4),asset:'',scale:1});
+  state.items.push({id:crypto.randomUUID(),side,name:'新的一笔',amount:'0',date:localDate(),clock:'12:00',at:Math.min(state.duration-1,1+state.items.length*.4),asset:'',scale:1});
 },{refresh:true,end:true}));
 $('#image-picker').addEventListener('change',async e=>{
   const file=e.target.files[0],apply=pendingImage;if(!file||!apply)return;

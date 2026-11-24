@@ -1,26 +1,31 @@
-import {clamp,cents} from './core.js';
+import {clamp,cents,calendarDay,compareOrders,localDate} from './core.js';
 
 export const HEADER_HEIGHT=104;
 const ROW_HEIGHT=94, GROUP_GAP=18, SUMMARY_HEIGHT=166;
 
-// Consumption time, shared by both people, is the only ordering source.
-// Legacy per-item animation offsets are deliberately not used by receipts.
+// Use UTC calendar-day numbers so DST and local timezone changes cannot
+// alter the inclusive date range or merge matching days in different months.
 export function receiptTimeline(state) {
-  const byHour=new Map();
+  const fallbackDate=localDate();
+  const days=state.items.map(item=>calendarDay(item.date||fallbackDate));
+  const span=days.length?Math.max(...days)-Math.min(...days)+1:0;
+  const dateMode=span<=7?'weekday':'day';
+  const byDate=new Map();
   for(const item of state.items) {
-    const hour=Number(item.clock.slice(0,2));
-    if(!byHour.has(hour))byHour.set(hour,{hour,label:`${hour}点`,sides:[[],[]]});
-    byHour.get(hour).sides[item.side].push(item);
+    const date=item.date||fallbackDate,day=calendarDay(date);
+    const weekday=['周日','周一','周二','周三','周四','周五','周六'][((day+4)%7+7)%7];
+    if(!byDate.has(date))byDate.set(date,{date,label:dateMode==='weekday'?weekday:`${Number(date.slice(8))}号`,sides:[[],[]]});
+    byDate.get(date).sides[item.side].push(item);
   }
   let y=HEADER_HEIGHT;
-  const groups=[...byHour.values()].sort((a,b)=>a.hour-b.hour).map(group=>{
-    for(const items of group.sides)items.sort((a,b)=>a.clock.localeCompare(b.clock)||a.id.localeCompare(b.id));
+  const groups=[...byDate.values()].sort((a,b)=>a.date.localeCompare(b.date)).map(group=>{
+    for(const items of group.sides)items.sort(compareOrders);
     const top=y,rows=Math.max(...group.sides.map(items=>items.length),1);
     y+=rows*ROW_HEIGHT+GROUP_GAP;
     return {...group,top,bottom:y,rowHeight:ROW_HEIGHT};
   });
   const summaryY=y+12;
-  return {groups,summaryY,height:summaryY+SUMMARY_HEIGHT};
+  return {groups,summaryY,height:summaryY+SUMMARY_HEIGHT,dateMode,span};
 }
 
 export function receiptPrintSteps(duration,timeline) {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {example,totals,validate,normalize} from './core.js';
+import {example,totals,validate,normalize,localDate,calendarDay} from './core.js';
 import {receiptTimeline,receiptFrame,receiptPrintSteps} from './receipt-timeline.js';
 test('timeline totals include only revealed orders and preserve cents',()=>{
   const s=example('stickers');s.items=s.items.slice(0,3);
@@ -34,16 +34,16 @@ test('new backgrounds persist and old preset drafts adopt fish without changing 
   assert.equal(custom.theme,'lilac');
   assert.equal(normalize({...fresh,theme:'paws',background:'my-background'}).background,'my-background');
 });
-test('receipt shares hourly groups, orders by consumption time, and leaves absent sides empty',()=>{
+test('receipt shares date groups, sorts within a day, and leaves absent sides empty',()=>{
   const s=example('receipt');
   s.items=[
-    {...s.items[0],id:'late',side:0,clock:'19:00',at:0},
-    {...s.items[1],id:'right',side:1,clock:'08:30',at:12},
-    {...s.items[2],id:'left-b',side:0,clock:'08:45',at:1},
-    {...s.items[3],id:'left-a',side:0,clock:'08:00',at:13},
+    {...s.items[0],id:'late',side:0,date:'2026-11-24',clock:'07:00',at:0},
+    {...s.items[1],id:'right',side:1,date:'2026-11-23',clock:'08:30',at:12},
+    {...s.items[2],id:'left-b',side:0,date:'2026-11-23',clock:'18:45',at:1},
+    {...s.items[3],id:'left-a',side:0,date:'2026-11-23',clock:'08:00',at:13},
   ];
   const timeline=receiptTimeline(s);
-  assert.deepEqual(timeline.groups.map(g=>g.label),['8点','19点']);
+  assert.deepEqual(timeline.groups.map(g=>g.label),['周一','周二']);
   assert.deepEqual(timeline.groups[0].sides.map(items=>items.map(x=>x.id)),[['left-a','left-b'],['right']]);
   assert.deepEqual(timeline.groups[1].sides[1],[]);
   assert.ok(timeline.groups[1].top>=timeline.groups[0].bottom);
@@ -55,7 +55,7 @@ test('receipt printing and both totals ignore legacy independent animation offse
     const a=receiptFrame(s,time),b=receiptFrame(other,time);
     assert.equal(a.feed,b.feed);
     assert.deepEqual(a.totals,b.totals);
-    assert.deepEqual(a.printed.map(g=>g.hour),b.printed.map(g=>g.hour));
+    assert.deepEqual(a.printed.map(g=>g.date),b.printed.map(g=>g.date));
   }
   const timeline=receiptTimeline(s);
   const firstDone=Array.from({length:171},(_,i)=>i/10).find(t=>receiptFrame(s,t,timeline).printed.length===1);
@@ -63,11 +63,11 @@ test('receipt printing and both totals ignore legacy independent animation offse
   assert.deepEqual(first.totals,timeline.groups[0].sides.map(items=>items.reduce((sum,x)=>sum+Math.round(Number(x.amount)*100),0)/100));
   assert.deepEqual(receiptFrame(s,s.duration).totals,totals(s,s.duration));
 });
-test('paper never reverses and finishes empty, single-hour, and short multi-hour receipts',()=>{
-  for(const variant of ['empty','one-hour','multiple']){
+test('paper never reverses and finishes empty, single-day, and short multi-day receipts',()=>{
+  for(const variant of ['empty','one-day','multiple']){
     const s=example('receipt');s.duration=3;
     if(variant==='empty')s.items=[];
-    if(variant==='one-hour')s.items.forEach(x=>x.clock='12:00');
+    if(variant==='one-day')s.items.forEach(x=>x.date='2026-11-23');
     let previous=0;
     for(let i=0;i<=300;i++){
       const current=receiptFrame(s,i/100);
@@ -103,7 +103,7 @@ test('each time block is pulled quickly and stays completely still before the ne
 });
 test('dense three-second receipts retain a stationary interval for every pull',()=>{
   const s=example('receipt');s.duration=3;
-  s.items=Array.from({length:36},(_,i)=>({...s.items[i%8],id:String(i),side:i%2,at:0,clock:`${String(i%24).padStart(2,'0')}:00`}));
+  s.items=Array.from({length:36},(_,i)=>({...s.items[i%8],id:String(i),side:i%2,at:0,date:localDate(new Date(2026,10,1+i)),clock:`${String(i%24).padStart(2,'0')}:00`}));
   const timeline=receiptTimeline(s),steps=receiptPrintSteps(s.duration,timeline);
   for(let i=0;i<steps.length;i++){
     const next=steps[i+1]?.start??s.duration;
@@ -111,4 +111,61 @@ test('dense three-second receipts retain a stationary interval for every pull',(
     assert.equal(receiptFrame(s,(steps[i].end+next)/2,timeline).feed,steps[i].to);
   }
   assert.deepEqual(receiptFrame(s,3).totals,totals(s,3));
+});
+const onDates=dates=>{
+  const s=example('receipt');
+  s.items=dates.map((date,i)=>({...s.items[i%s.items.length],id:`date-${i}`,side:i%2,date,at:0}));
+  return s;
+};
+test('seven inclusive dates use weekdays, including a week or month boundary',()=>{
+  for(const dates of [
+    ['2026-11-23','2026-11-29'],
+    ['2026-11-27','2026-12-03'],
+    ['2026-12-29','2027-01-04'],
+  ]){
+    const t=receiptTimeline(onDates(dates));
+    assert.equal(t.dateMode,'weekday');
+    assert.equal(t.span,7);
+    assert.ok(t.groups.every(g=>/^周[一二三四五六日]$/.test(g.label)));
+  }
+  assert.deepEqual(receiptTimeline(onDates(['2026-11-23','2026-11-29'])).groups.map(g=>g.label),['周一','周日']);
+});
+test('eight days or an entire month display day numbers',()=>{
+  for(const [dates,labels] of [
+    [['2026-11-23','2026-11-30'],['23号','30号']],
+    [['2026-10-01','2026-10-02','2026-10-31'],['1号','2号','31号']],
+  ]){
+    const t=receiptTimeline(onDates(dates));
+    assert.equal(t.dateMode,'day');
+    assert.deepEqual(t.groups.map(g=>g.label),labels);
+  }
+});
+test('month and year boundaries retain day labels without merging equal day numbers',()=>{
+  const s=onDates(['2027-01-01','2026-11-01','2026-12-31','2026-12-01']);
+  const t=receiptTimeline(s);
+  assert.equal(t.dateMode,'day');
+  assert.deepEqual(t.groups.map(g=>g.date),['2026-11-01','2026-12-01','2026-12-31','2027-01-01']);
+  assert.deepEqual(t.groups.map(g=>g.label),['1号','1号','31号','1号']);
+  assert.deepEqual(receiptFrame(s,s.duration).totals,totals(s,s.duration));
+});
+test('dates validate real calendar days and inclusive ranges across leap day',()=>{
+  assert.notEqual(calendarDay('2028-02-29'),null);
+  for(const date of ['2026-02-29','2026-04-31','2026-11-00','2026-13-01','24','',null]){
+    assert.equal(calendarDay(date),null);
+    assert.throws(()=>validate(onDates([date])));
+  }
+  const t=receiptTimeline(onDates(['2028-02-27','2028-03-04']));
+  assert.equal(t.span,7);
+  assert.equal(t.dateMode,'weekday');
+});
+test('legacy drafts acquire one local date and preserve images, times, amounts and other settings',()=>{
+  const old=example('receipt');
+  old.background='custom-bg';
+  for(const item of old.items)delete item.date;
+  const migrated=normalize(old);
+  assert.ok(migrated.items.every(item=>item.date===localDate()));
+  const withoutDate=structuredClone(migrated);
+  for(const item of withoutDate.items)delete item.date;
+  assert.deepEqual(withoutDate,old);
+  assert.deepEqual(normalize(migrated),migrated);
 });

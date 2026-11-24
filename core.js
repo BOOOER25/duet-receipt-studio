@@ -1,5 +1,12 @@
 export const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 export const cents = n => Math.round(Number(n) * 100);
+export const localDate = (value = new Date()) => `${String(value.getFullYear()).padStart(4,'0')}-${String(value.getMonth()+1).padStart(2,'0')}-${String(value.getDate()).padStart(2,'0')}`;
+export function calendarDay(value) {
+  if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return null;
+  const ms=Date.parse(value+'T00:00:00Z');
+  return Number.isFinite(ms)&&new Date(ms).toISOString().slice(0,10)===value?ms/86400000:null;
+}
+export const compareOrders = (a,b) => (a.date||'').localeCompare(b.date||'')||a.clock.localeCompare(b.clock)||a.id.localeCompare(b.id);
 export function amount(n, unit = '元') {
   const value = (Math.round(Number(n) * 100) / 100).toFixed(2).replace(/\.00$/, '');
   return unit === '元' ? `¥${value}` : `${value} ${unit}`;
@@ -26,6 +33,7 @@ export function validate(state) {
     if (!/^\d{1,6}(\.\d{1,2})?$/.test(String(item.amount))) throw new Error('金额或热量为 0–999999.99，最多两位小数');
     if (!Number.isFinite(item.at) || item.at < 0 || item.at > state.duration - .5) throw new Error('出现时间需在视频结束前至少 0.5 秒');
     if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(item.clock)) throw new Error('请填写有效的消费时间');
+    if (calendarDay(item.date) === null) throw new Error('请选择有效的消费日期');
     if (!Number.isFinite(item.scale) || item.scale < .6 || item.scale > 1.4) throw new Error('图片大小超出范围');
   }
   return state;
@@ -35,6 +43,7 @@ export function normalize(raw) {
   // Allowlisted data only; imported fields never become HTML or remote URLs.
   const text = (x, fallback = '') => typeof x === 'string' ? x : fallback;
   const ref = x => typeof x === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(x) ? x : '';
+  const fallbackDate=localDate();
   const state = {
     version: 1, title: text(raw?.title), footer: text(raw?.footer).slice(0, 60),
     unit: raw?.unit, duration: Number(raw?.duration),
@@ -45,6 +54,7 @@ export function normalize(raw) {
     people: Array.isArray(raw?.people) ? raw.people.map(p => ({name: text(p.name), avatar: ref(p.avatar)})) : [],
     items: Array.isArray(raw?.items) ? raw.items.map(x => ({
       id: ref(x.id), side: Number(x.side), name: text(x.name), amount: String(x.amount),
+      date: x.date === undefined ? fallbackDate : text(x.date),
       clock: text(x.clock), at: Number(x.at), asset: ref(x.asset), scale: Number(x.scale),
     })) : [],
   };
@@ -53,6 +63,7 @@ export function normalize(raw) {
 export function example(variant) {
   const names = ['早餐三明治', '冰美式', '午餐便当', '水果酸奶', '晚餐意面', '小蛋糕', '鲜花', '奶茶'];
   const prices = [18, 12, 32.5, 16, 42, 28, 35, 19.9];
+  const today=new Date(),monday=new Date(today.getFullYear(),today.getMonth(),today.getDate()-(today.getDay()+6)%7);
   return {
     version: 1, title: '当我和闺蜜共享了今日消费', footer: '认真生活，也认真记录 · 喵喵记账',
     unit: '元', duration: variant === 'receipt' ? 17 : 15,
@@ -63,6 +74,7 @@ export function example(variant) {
       amount: String(prices[i]), clock: (variant==='receipt'
         ? ['08:00', '08:30', '12:00', '12:30', '18:00', '19:00', '20:00', '21:00']
         : ['08:00', '08:30', '12:00', '14:00', '18:00', '19:00', '20:00', '21:00'])[i],
+      date: localDate(new Date(monday.getFullYear(),monday.getMonth(),monday.getDate()+Math.floor(i/2))),
       at: 1 + i * 1.5, asset: `sample-${i % 4}`, scale: 1,
     })),
   };
