@@ -9,16 +9,21 @@ export function receiptTimeline(state) {
   const fallbackDate=localDate();
   const days=state.items.map(item=>calendarDay(item.date||fallbackDate));
   const span=days.length?Math.max(...days)-Math.min(...days)+1:0;
-  const dateMode=span<=7?'weekday':'day';
-  const byDate=new Map();
+  const dateMode=span<=1?'hour':span<=7?'weekday':'day';
+  const byPeriod=new Map();
   for(const item of state.items) {
     const date=item.date||fallbackDate,day=calendarDay(date);
+    const hour=Number(item.clock.slice(0,2)),key=dateMode==='hour'?`${date}-${hour}`:date;
     const weekday=['周日','周一','周二','周三','周四','周五','周六'][((day+4)%7+7)%7];
-    if(!byDate.has(date))byDate.set(date,{date,label:dateMode==='weekday'?weekday:`${Number(date.slice(8))}号`,sides:[[],[]]});
-    byDate.get(date).sides[item.side].push(item);
+    if(!byPeriod.has(key))byPeriod.set(key,{
+      date,hour:dateMode==='hour'?hour:null,
+      label:dateMode==='hour'?`${hour}点`:dateMode==='weekday'?weekday:`${Number(date.slice(8))}号`,
+      sides:[[],[]],
+    });
+    byPeriod.get(key).sides[item.side].push(item);
   }
   let y=HEADER_HEIGHT;
-  const groups=[...byDate.values()].sort((a,b)=>a.date.localeCompare(b.date)).map(group=>{
+  const groups=[...byPeriod.values()].sort((a,b)=>a.date.localeCompare(b.date)||a.hour-b.hour).map(group=>{
     for(const items of group.sides)items.sort(compareOrders);
     const top=y,rows=Math.max(...group.sides.map(items=>items.length),1);
     y+=rows*ROW_HEIGHT+GROUP_GAP;

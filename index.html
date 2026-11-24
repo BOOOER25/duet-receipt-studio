@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>双人素材工作室</title><meta name="color-scheme" content="light">
-  <link rel="stylesheet" href="./styles.css"><script type="module" src="./app.js?v=299d9ba89de8"></script>
+  <link rel="stylesheet" href="./styles.css"><script type="module" src="./app.js?v=b41784647820"></script>
 </head>
 <body>
   <main>
@@ -28,12 +28,12 @@
           <div class="section-label"><span>03</span><h2>加一点氛围</h2></div>
           <button id="upload-music">上传背景音乐</button><button id="clear-music" class="quiet">移除音乐</button><p id="music-status" class="note">未添加背景音乐，导出为无声视频。</p>
           <p class="note">音乐随视频一同导出；预览时仅播放画面。</p>
-          <details><summary>操作说明</summary><p class="note">每笔明细可选择消费日期。同一天的双方记录沿中央日期轴对应展示，日内按消费时间排序。最早到最晚日期覆盖不超过 7 天时显示周几；超过 7 天显示几号，跨月仍按真实日期排序。小票分段吐出并停顿，合计随已打印的日期更新。录制时保持本页面在前台。</p><button id="reset" class="quiet">重新载入示例</button></details>
+          <details><summary>操作说明</summary><p class="note">每笔明细可选择消费日期。全部记录在同一天时，中线显示 12点、13点等小时刻度，双方同小时的内容对应排列，商品下方保留具体时间。跨日期且覆盖不超过 7 天时显示周几；超过 7 天显示几号，跨月仍按真实日期排序。小票分段吐出并停顿，合计随已打印的时段更新。录制时保持本页面在前台。</p><button id="reset" class="quiet">重新载入示例</button></details>
         </div>
         <div id="panel-orders" class="tab-panel" hidden>
           <div class="section-label"><span>01</span><h2>把每一笔贴进来</h2></div>
           <div class="order-toolbar"><select id="side-filter" aria-label="查看哪一方明细"><option value="0">我的明细</option><option value="1">搭子的明细</option></select><button id="add-item" class="primary">＋ 添加一笔</button></div>
-          <p class="note">每方最多 18 笔。上传图片后可为每笔素材选择消费日期和时间，同一天的双方明细沿中线对应展示。日期范围不超过 7 天显示周几；超过 7 天显示几号，跨月也按真实日期排序。</p><div id="orders"></div>
+          <p class="note">每方最多 18 笔。每笔素材可选择消费日期和时间。全部在同一天时，中线显示 12点、13点等小时刻度，双方同小时对应排列；跨日期且不超过 7 天显示周几；超过 7 天显示几号，跨月按真实日期排序。</p><div id="orders"></div>
         </div>
         <div id="panel-assets" class="tab-panel" hidden>
           <div class="section-label"><span>01</span><h2>你的贴纸素材盒</h2></div>

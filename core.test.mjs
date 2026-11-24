@@ -117,6 +117,39 @@ const onDates=dates=>{
   s.items=dates.map((date,i)=>({...s.items[i%s.items.length],id:`date-${i}`,side:i%2,date,at:0}));
   return s;
 };
+test('one calendar day restores central hour markers and aligns both sides by hour',()=>{
+  const s=example('receipt');
+  s.items=[
+    {...s.items[0],id:'last',side:0,date:'2026-11-24',clock:'23:59',at:0},
+    {...s.items[1],id:'right',side:1,date:'2026-11-24',clock:'12:30',at:12},
+    {...s.items[2],id:'left-b',side:0,date:'2026-11-24',clock:'12:45',at:1},
+    {...s.items[3],id:'left-a',side:0,date:'2026-11-24',clock:'12:00',at:13},
+    {...s.items[4],id:'first',side:1,date:'2026-11-24',clock:'00:00',at:0},
+    {...s.items[5],id:'next',side:1,date:'2026-11-24',clock:'13:00',at:0},
+  ];
+  const t=receiptTimeline(s);
+  assert.equal(t.dateMode,'hour');
+  assert.equal(t.span,1);
+  assert.deepEqual(t.groups.map(g=>g.label),['0点','12点','13点','23点']);
+  assert.deepEqual(t.groups[1].sides.map(items=>items.map(x=>x.id)),[['left-a','left-b'],['right']]);
+  assert.deepEqual(t.groups[2].sides[0],[]);
+  const steps=receiptPrintSteps(s.duration,t);
+  for(let i=0;i<t.groups.length;i++){
+    const printed=receiptFrame(s,steps[i+1].end,t,steps);
+    assert.equal(printed.printed.length,i+1);
+    assert.deepEqual(printed.totals,t.groups.slice(0,i+1).reduce((sum,g)=>sum.map((n,side)=>n+g.sides[side].reduce((v,item)=>v+Math.round(Number(item.amount)*100),0)),[0,0]).map(n=>n/100));
+  }
+  assert.deepEqual(receiptFrame(s,s.duration).totals,totals(s,s.duration));
+});
+test('crossing midnight uses weekday markers even when elapsed time is under 24 hours',()=>{
+  const s=onDates(['2026-11-24','2026-11-25']);
+  s.items[0].clock='23:59';s.items[1].clock='00:01';
+  const t=receiptTimeline(s);
+  assert.equal(t.dateMode,'weekday');
+  assert.deepEqual(t.groups.map(g=>g.label),['周二','周三']);
+  assert.equal(receiptTimeline(onDates(['2026-11-24'])).groups[0].label,'8点');
+  assert.deepEqual(receiptTimeline(onDates([])).groups,[]);
+});
 test('seven inclusive dates use weekdays, including a week or month boundary',()=>{
   for(const dates of [
     ['2026-11-23','2026-11-29'],
@@ -168,4 +201,5 @@ test('legacy drafts acquire one local date and preserve images, times, amounts a
   for(const item of withoutDate.items)delete item.date;
   assert.deepEqual(withoutDate,old);
   assert.deepEqual(normalize(migrated),migrated);
+  assert.equal(receiptTimeline(migrated).dateMode,'hour');
 });
